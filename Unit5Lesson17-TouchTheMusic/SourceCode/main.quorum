@@ -1,0 +1,264 @@
+use Libraries.Game.Game
+use Libraries.Containers.Array
+use Libraries.Sound.Audio
+use Libraries.Game.InputMonitor
+use Libraries.Interface.Events.KeyboardEvent
+use Libraries.Interface.Events.KeyboardListener
+use Libraries.Compute.Random
+use Libraries.Game.Graphics.Drawable
+use Libraries.Game.Graphics.Color
+
+
+class Main is Game, KeyboardListener
+    // Instatiating audio objects for music
+    Audio music0
+    Audio music1
+    Audio music2
+    Audio music3
+    Audio music4
+
+    // Instatiating an audio obeject to keep track of current music palyed
+    Audio currentMusic
+
+    // Instantiating a Drawable object for the back ground pciture
+    Drawable bg
+
+    // Instantiating an object that keeps track of current picture on the screen
+    Drawable currentPic
+
+    // Instatiating audio objects for the sound effects
+    Audio soundFXhit
+    Audio soundFXmiss
+    Audio soundFXsad
+    Audio soundFXhappy
+
+    // Instatiating Color object
+    Color color
+    Color currentColor
+    
+    // Instatiating arrays that store music and picture
+    Array<Audio> musicArray
+    Array<Drawable> pictureArray
+
+    // Instatiating key objects for key board input monitor to work
+    InputMonitor iMonitor
+    KeyboardEvent key
+
+    // Instatiating Random object
+    Random random
+
+    // Instatiating Drawable objects that corresponds the audio objects
+    Drawable picture0
+    Drawable picture1
+    Drawable picture2
+    Drawable picture3
+    Drawable picture4
+
+    // Declaring integer variable that keeps track of the music playing
+    integer musicIndex = 0
+
+    // Declaring number variables that controls current music's balance and volume
+    number currentB = 0
+    number currentV = 0.1
+    number randomBalance = 0
+
+    
+    // Declaring an integer variable that keeps track of the point the user scores 
+    integer hitMusic = 0
+
+
+    action Main
+        // Setting the screen size to the purpose of the App
+        SetScreenSize(1000, 400)
+        StartGame()
+    end
+
+    action CreateGame
+        // Loading backdrop picutre and adding it to the sreen
+        bg:Load("Graphics/backdrop.JPG")
+        Add(bg)
+
+        // Storing audio objects in an Array
+        musicArray:Add(music0)
+        musicArray:Add(music1)
+        musicArray:Add(music2)
+        musicArray:Add(music3)
+        musicArray:Add(music4)
+
+        // Calling the ction to load all music
+        LoadAllMusic(musicArray)
+
+        // Sotring Drawable objects in an Array
+        pictureArray:Add(picture0)
+        pictureArray:Add(picture1)
+        pictureArray:Add(picture2)
+        pictureArray:Add(picture3)
+        pictureArray:Add(picture4)
+
+        // Calling action
+        LoadAllPictures()
+        
+        // Preparing the sound effect
+        soundFXhit:Load("Audio/Bing.ogg")
+        soundFXmiss:Load("Audio/Boing.ogg")
+        soundFXsad:Load("Audio/SadTrombone.ogg")
+        soundFXhappy:Load("Audio/PianoChordC.wav")
+
+        // Letting the first picture to show 
+        currentPic = pictureArray:Get(musicIndex)
+        
+
+
+        // Letting the first screen to play the music
+        currentMusic = musicArray:Get(musicIndex)
+        currentMusic:SetBalance(currentB)
+        currentMusic:SetVolume(0.1)
+        currentMusic:Play()
+        
+        // Calling the action BalanceToPosition inside of the SetPosition
+        currentPic:SetPosition(BalanceToPosition(currentB), 150)
+        currentPic:Show()
+        AddKeyboardListener(me)
+    end
+
+   
+    action Update(number seconds)
+        //Making it sure that update does not change the music balance and volume abruptly.
+        currentV = currentMusic:GetVolume()
+        currentB = currentMusic:GetBalance()
+            
+        // Evrytime the screen update, the music increase the volume gradually, whiel keeping it's balalnce the dame
+        currentMusic:SetVolume(currentV + 0.01 * seconds)
+        currentMusic:SetBalance(currentB)
+
+        // Calling the BalanceToPosition in SetPosition for the currentPic so the balance positiona dn pciture position is synchronized
+        currentPic:SetPosition(BalanceToPosition(currentB), 150)
+
+        // Setting the Win and Loose condtion in the update loop
+        if hitMusic < 5
+            if currentV > 1
+            currentMusic:SetVolume(1.0)
+            end
+
+            if currentV >= 1
+            currentMusic:Stop()
+            soundFXsad:PlayUntilDone()
+            Exit()
+            end
+        else
+            soundFXhappy:PlayUntilDone()
+            Exit()
+        end
+
+        // Input monitor to moe=ve the sound balance to the right and left
+        if iMonitor:IsKeyPressed(key:RIGHT)
+            if currentB >= -1.0
+                currentB = currentB -0.1 * seconds
+            else
+                currentB = -1.0
+            end
+            currentMusic:SetBalance(currentB)
+        elseif iMonitor:IsKeyPressed(key:LEFT)
+            if currentB <= 1.0
+                currentB = currentB + 0.1 * seconds
+            else
+                currentB = 1.0
+            end
+            currentMusic:SetBalance(currentB)
+        end
+    end
+
+    // Regular keyboard handler
+    action PressedKey(KeyboardEvent event)
+        if event:keyCode = event:SPACE
+            // The 'if-else' structure controls the hit and miss
+            if currentB > -0.1 and currentB < 0.1
+                soundFXhit:Play()
+                currentMusic:Stop()
+                NextMusic()
+                NextPicture()
+                hitMusic = hitMusic + 1
+            else
+                soundFXmiss:Play()
+            end
+                
+            output currentB + " : " + currentV
+        elseif event:keyCode = event:ESCAPE
+            Exit()
+        end
+    end
+
+// **** Refactoring the code block for managing complexity and re-usability
+
+    // Action tht automate the loading of a music to an audio object
+    action LoadAllMusic(Array<Audio> array)
+        integer musicLoadCounter = 0
+        repeat while musicLoadCounter <= array:GetSize() - 1
+            array:Get(musicLoadCounter):Load("Audio/music"+ musicLoadCounter +".ogg")
+            musicLoadCounter = musicLoadCounter + 1
+        end
+    end
+
+    // Action that generate the next music at random balance position
+    action NextMusic
+        ConvertToBalnceNumber()
+        MusicIndexCycle()
+        currentMusic = musicArray:Get(musicIndex)
+        currentMusic:SetBalance(randomBalance)
+        currentMusic:SetVolume(0.1)
+        currentMusic:Play()
+    end
+
+    // Action that convert the radom integer into the percentatge numbers ofr the Balance
+    action ConvertToBalnceNumber
+        integer base = random:RandomIntegerBetween(-9, 9)
+        number baseNumber = cast(number, base)
+        randomBalance = baseNumber/10
+    end
+
+    // Action that limits the range of musicIndex variable
+    action MusicIndexCycle
+        if musicIndex < 4
+            musicIndex = musicIndex + 1
+        else
+            musicIndex = 0
+        end
+    end
+
+    // Action that convert the random integer to number so it can be used for color value setting
+    action ConvertToNumber returns number
+        integer base = random:RandomIntegerBetween(1, 100)
+        number colorValue = cast(number, base) / 100
+        return colorValue
+    end
+
+    // Action that load all pictures easily
+    action LoadAllPictures
+        integer picLoadCounter = 0
+            repeat while picLoadCounter <= pictureArray:GetSize() - 1
+            number redVal = ConvertToNumber()
+            number greenVal = ConvertToNumber()
+            number blueVal = ConvertToNumber()
+            color:SetColor(redVal, greenVal, blueVal, 0.2)
+            pictureArray:Get(picLoadCounter):LoadFilledCircle(50, color)
+            Add(pictureArray:Get(picLoadCounter))
+            pictureArray:Get(picLoadCounter):Hide()
+            picLoadCounter = picLoadCounter + 1
+        end
+    end
+
+    // action that takes music balance as a parameter, then converts it inot X-coordinate value, and retuns it.
+    action BalanceToPosition(number musicBalance) returns number
+        number positionX = (musicBalance + 1) * 500
+        number centerX = positionX -50
+        return centerX
+    end
+
+    // Action that set up the next picture when the user succesfully face the music.
+    action NextPicture
+        currentPic:Hide()
+        currentPic = pictureArray:Get(musicIndex)
+        currentPic:SetPosition(randomBalance, 150)
+        currentPic:Show()
+    end
+end
